@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Mic, Save } from 'lucide-react';
+import { Mic, Save, Pin, Trash2 } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { Alert, AlertDescription } from './components/ui/alert';
 import { v4 as uuid } from 'uuid';
 
 const VoiceNotesApp = () => {
-  const [notes, setNotes] = useState<Array<{ id: string; title: string; text: string; createdAt: Date }>>([]);
+  const [notes, setNotes] = useState<Array<{ id: string; title: string; text: string; createdAt: Date; pinned: boolean }>>([]);
   const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [interimTranscript, setInterimTranscript] = useState('');
@@ -95,7 +95,8 @@ const VoiceNotesApp = () => {
         id: uuid(),
         title: noteText.slice(0, 15) + (noteText.length > 15 ? '...' : ''),
         text: noteText,
-        createdAt: new Date()
+        createdAt: new Date(),
+        pinned: false
       };
       setNotes((prevNotes) => {
         const updatedNotes = [...prevNotes, newNote];
@@ -106,9 +107,27 @@ const VoiceNotesApp = () => {
     }
   }, [transcript]);
 
+  const togglePinNote = useCallback((id: string) => {
+    setNotes((prevNotes) => {
+      const updatedNotes = prevNotes.map(note =>
+        note.id === id ? { ...note, pinned: !note.pinned } : note
+      );
+      localStorage.setItem('voiceNotes', JSON.stringify(updatedNotes));
+      return updatedNotes;
+    });
+  }, []);
+
+  const deleteNote = useCallback((id: string) => {
+    setNotes((prevNotes) => {
+      const updatedNotes = prevNotes.filter(note => note.id !== id);
+      localStorage.setItem('voiceNotes', JSON.stringify(updatedNotes));
+      return updatedNotes;
+    });
+  }, []);
+
   return (
     <div className="p-4 max-w-md mx-auto">
-      <h1 className="text-2xl font-bold mb-4">Voice Notes App</h1>
+      <h1 className="text-2xl font-bold mb-4">Voice Notes</h1>
       {error && (
         <Alert variant="destructive" className="mb-4">
           <AlertDescription className="whitespace-pre-line">{error}</AlertDescription>
@@ -142,23 +161,44 @@ const VoiceNotesApp = () => {
       </div>
       <div>
         <h2 className="text-xl font-semibold mb-2">Saved Notes</h2>
-        {notes.map((note) => (
-          <Card key={note.id} className="mb-2">
-            <CardHeader>
-              <CardTitle>{note.title}</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                {note.createdAt ? note.createdAt.toLocaleString('en-US', {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit'
-                }) : 'Date not available'}
-              </p>
-            </CardHeader>
-            <CardContent>{note.text}</CardContent>
-          </Card>
-        ))}
+        {notes
+          .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0))
+          .map((note) => (
+            <Card key={note.id} className="mb-2">
+              <CardHeader>
+                <div className="flex justify-between items-center">
+                  <CardTitle>{note.title}</CardTitle>
+                  <div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => togglePinNote(note.id)}
+                      className="mr-2"
+                    >
+                      <Pin className={note.pinned ? "text-primary" : "text-muted-foreground"} />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => deleteNote(note.id)}
+                    >
+                      <Trash2 className="text-destructive" />
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {note.createdAt ? note.createdAt.toLocaleString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  }) : 'Date not available'}
+                </p>
+              </CardHeader>
+              <CardContent>{note.text}</CardContent>
+            </Card>
+          ))}
       </div>
     </div>
   );
