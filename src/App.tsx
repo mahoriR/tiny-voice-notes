@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Mic, Save, Pin, Trash2 } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
@@ -12,6 +12,39 @@ const VoiceNotesApp = () => {
   const [interimTranscript, setInterimTranscript] = useState('');
   const [recognition, setRecognition] = useState<SpeechRecognition | null>(null);
   const [error, setError] = useState('');
+  const [isInitialized, setIsInitialized] = useState(false);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+  const handleRecognitionError = useCallback((error: string) => {
+    console.error('Recognition error:', error);
+    if (error === 'not-allowed') {
+      setError(`Microphone access is not allowed. ${isIOS ? 'On iOS, make sure you\'re using Safari and that you\'ve granted microphone permissions in your device settings.' : 'Please ensure you\'ve granted microphone permissions in your browser settings.'}`);
+      setIsRecording(false);
+    } else if (error === 'aborted' && isIOS) {
+      console.log('Recognition aborted on iOS, attempting to restart...');
+      setTimeout(() => startRecognition(), 100);
+    } else {
+      setError(`Error: ${error}. Please ensure microphone access is allowed and try again.`);
+      setIsRecording(false);
+    }
+  }, []);
+
+  const startRecognition = useCallback(() => {
+    if (recognitionRef.current && isInitialized) {
+      try {
+        recognitionRef.current.start();
+        console.log('Recognition started');
+        setIsRecording(true);
+      } catch (err) {
+        console.error('Error starting recognition:', err);
+        handleRecognitionError('not-allowed');
+      }
+    } else {
+      console.error('Recognition not initialized');
+    }
+  }, [isInitialized, handleRecognitionError]);
 
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -19,13 +52,33 @@ const VoiceNotesApp = () => {
       const newRecognition = new SpeechRecognition();
       newRecognition.continuous = true;
       newRecognition.interimResults = true;
+      newRecognition.lang = 'en-US'; // Set the language explicitly
       newRecognition.onresult = handleRecognitionResult;
       newRecognition.onerror = (event: SpeechRecognitionErrorEvent) => handleRecognitionError(event.error);
+      newRecognition.onend = () => {
+        console.log('Recognition ended');
+        if (isRecording) {
+          if (isIOS) {
+            console.log('Recognition ended on iOS, stopping recording');
+            setIsRecording(false);
+            setTranscript((prev) => prev.trim());
+          } else {
+            console.log('Recognition ended unexpectedly, attempting to restart...');
+            setTimeout(() => {
+              if (isRecording) {
+                startRecognition();
+              }
+            }, 100);
+          }
+        }
+      };
+      recognitionRef.current = newRecognition;
       setRecognition(newRecognition);
+      setIsInitialized(true);
     } else {
-      setError('Speech recognition is not supported in this browser. Please try using Google Chrome or Microsoft Edge.');
+      setError('Speech recognition is not supported in this browser. Please try using Google Chrome or Safari.');
     }
-  }, []);
+  }, [isRecording, handleRecognitionError, startRecognition]);
 
   useEffect(() => {
     const storedNotes = localStorage.getItem('voiceNotes');
@@ -38,6 +91,7 @@ const VoiceNotesApp = () => {
   }, []);
 
   const handleRecognitionResult = (event: SpeechRecognitionEvent) => {
+    console.log('Recognition result received:', event.results);
     let interimTranscript = '';
     let finalTranscript = '';
 
@@ -49,54 +103,50 @@ const VoiceNotesApp = () => {
       }
     }
 
+    console.log('Final transcript:', finalTranscript);
+    console.log('Interim transcript:', interimTranscript);
+
     setTranscript((prev) => prev + finalTranscript);
     setInterimTranscript(interimTranscript);
   };
 
-  const handleRecognitionError = (error: string) => {
-    if (error === 'not-allowed') {
-      setError(`Microphone access is not allowed. This may be due to a permissions policy violation. 
-                Please try the following:
-                1. Ensure you've granted microphone permissions in your browser settings.
-                2. For iOS users: Try using Safari instead of Chrome, as it may have better support for speech recognition.
-                3. If using Chrome on desktop, go to chrome://flags and enable "Insecure origins treated as secure", add your development URL.
-                4. Restart your browser and try again.`);
-    } else if (error === 'aborted') {
-      setError(`The recording was aborted. This might be due to a temporary issue with your microphone or browser.
-                Please try the following:
-                1. Refresh the page and try again.
-                2. Check if any other applications are using your microphone.
-                3. For iOS users: Try using Safari instead of Chrome.
-                4. Restart your browser or device if the issue persists.`);
-    } else {
-      setError(`Error: ${error}. Please ensure microphone access is allowed and try again.`);
-    }
-    setIsRecording(false);
-  };
-
   const startRecording = useCallback(async () => {
     setError('');
-    if (!recognition) {
-      setError('Speech recognition is not supported in this browser. Please try using Safari on iOS or Chrome/Edge on desktop.');
+    if (!recognitionRef.current || !isInitialized) {
+      setError('Speech recognition is not supported or not initialized. Please try using Safari or Chrome.');
       return;
     }
     try {
-      await recognition.start();
-      setIsRecording(true);
-      setTranscript('');
-      setInterimTranscript('');
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+        startRecognition();
+        setTranscript('');
+        setInterimTranscript('');
+      } else {
+        throw new Error('getUserMedia not supported');
+      }
     } catch (err) {
-      console.error('Error starting recognition:', err);
-      handleRecognitionError('not-allowed');
+      console.error('Error starting recording:', err);
+      if (err instanceof DOMException && err.name === 'NotAllowedError') {
+        handleRecognitionError('not-allowed');
+      } else {
+        setError('An error occurred while trying to start recording. Please try again.');
+      }
     }
-  }, [recognition]);
+  }, [isInitialized, startRecognition]);
 
   const stopRecording = useCallback(() => {
     setIsRecording(false);
-    if (recognition) {
-      recognition.stop();
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      if (isIOS) {
+        // Force the recognition to end on iOS
+        recognitionRef.current.abort();
+      }
     }
-  }, [recognition]);
+    // Enable the save note button by updating the transcript
+    setTranscript((prev) => prev.trim());
+  }, []);
 
   const saveNote = useCallback(() => {
     if (transcript.trim()) {
@@ -109,7 +159,7 @@ const VoiceNotesApp = () => {
         pinned: false
       };
       setNotes((prevNotes) => {
-        const updatedNotes = [...prevNotes, newNote];
+        const updatedNotes = [newNote,...prevNotes];
         localStorage.setItem('voiceNotes', JSON.stringify(updatedNotes));
         return updatedNotes;
       });
