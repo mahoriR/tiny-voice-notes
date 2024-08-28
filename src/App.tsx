@@ -3,7 +3,7 @@ import { Mic, Save } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { Alert, AlertDescription } from './components/ui/alert';
-import WaveAnimation from './components/WaveAnimation';
+
 
 const VoiceNotesApp = () => {
   const [notes, setNotes] = useState<Array<{ id: number; text: string }>>([]);
@@ -43,15 +43,15 @@ const VoiceNotesApp = () => {
     setInterimTranscript(interimTranscript);
   };
 
-  const handleRecognitionError = (errorType: string) => {
-    if (errorType === 'not-allowed') {
+  const handleRecognitionError = (error: string) => {
+    if (error === 'not-allowed') {
       setError(`Microphone access is not allowed. This may be due to a permissions policy violation. 
                 Please try the following:
                 1. Ensure you're using HTTPS (even for localhost).
                 2. If using Chrome, go to chrome://flags and enable "Insecure origins treated as secure", add your development URL.
                 3. Restart your browser and try again.`);
     } else {
-      setError(`Error: ${errorType}. Please ensure microphone access is allowed.`);
+      setError(`Error: ${error}. Please ensure microphone access is allowed.`);
     }
     setIsRecording(false);
   };
@@ -108,7 +108,6 @@ const VoiceNotesApp = () => {
             <Save className="ml-2" />
           </Button>
         </div>
-        {isRecording && <WaveAnimation />}
       </div>
       <div className="mb-4">
         <textarea
