@@ -57,24 +57,34 @@ const VoiceNotesApp = () => {
     if (error === 'not-allowed') {
       setError(`Microphone access is not allowed. This may be due to a permissions policy violation. 
                 Please try the following:
-                1. Ensure you're using HTTPS (even for localhost).
-                2. If using Chrome, go to chrome://flags and enable "Insecure origins treated as secure", add your development URL.
-                3. Restart your browser and try again.`);
+                1. Ensure you've granted microphone permissions in your browser settings.
+                2. For iOS users: Try using Safari instead of Chrome, as it may have better support for speech recognition.
+                3. If using Chrome on desktop, go to chrome://flags and enable "Insecure origins treated as secure", add your development URL.
+                4. Restart your browser and try again.`);
+    } else if (error === 'aborted') {
+      setError(`The recording was aborted. This might be due to a temporary issue with your microphone or browser.
+                Please try the following:
+                1. Refresh the page and try again.
+                2. Check if any other applications are using your microphone.
+                3. For iOS users: Try using Safari instead of Chrome.
+                4. Restart your browser or device if the issue persists.`);
     } else {
-      setError(`Error: ${error}. Please ensure microphone access is allowed.`);
+      setError(`Error: ${error}. Please ensure microphone access is allowed and try again.`);
     }
     setIsRecording(false);
   };
 
   const startRecording = useCallback(async () => {
     setError('');
+    if (!recognition) {
+      setError('Speech recognition is not supported in this browser. Please try using Safari on iOS or Chrome/Edge on desktop.');
+      return;
+    }
     try {
-      if (recognition) {
-        await recognition.start();
-        setIsRecording(true);
-        setTranscript('');
-        setInterimTranscript('');
-      }
+      await recognition.start();
+      setIsRecording(true);
+      setTranscript('');
+      setInterimTranscript('');
     } catch (err) {
       console.error('Error starting recognition:', err);
       handleRecognitionError('not-allowed');
