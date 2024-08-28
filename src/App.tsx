@@ -3,10 +3,10 @@ import { Mic, Save } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { Alert, AlertDescription } from './components/ui/alert';
-
+import { v4 as uuid } from 'uuid';
 
 const VoiceNotesApp = () => {
-  const [notes, setNotes] = useState<Array<{ id: number; text: string }>>([]);
+  const [notes, setNotes] = useState<Array<{ id: string; title: string; text: string; createdAt: Date }>>([]);
   const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [interimTranscript, setInterimTranscript] = useState('');
@@ -24,6 +24,16 @@ const VoiceNotesApp = () => {
       setRecognition(newRecognition);
     } else {
       setError('Speech recognition is not supported in this browser. Please try using Google Chrome or Microsoft Edge.');
+    }
+  }, []);
+
+  useEffect(() => {
+    const storedNotes = localStorage.getItem('voiceNotes');
+    if (storedNotes) {
+      setNotes(JSON.parse(storedNotes).map((note: any) => ({
+        ...note,
+        createdAt: new Date(note.createdAt)
+      })));
     }
   }, []);
 
@@ -80,7 +90,18 @@ const VoiceNotesApp = () => {
 
   const saveNote = useCallback(() => {
     if (transcript.trim()) {
-      setNotes((prevNotes) => [...prevNotes, { id: Date.now(), text: transcript.trim() }]);
+      const noteText = transcript.trim();
+      const newNote = {
+        id: uuid(),
+        title: noteText.slice(0, 15) + (noteText.length > 15 ? '...' : ''),
+        text: noteText,
+        createdAt: new Date()
+      };
+      setNotes((prevNotes) => {
+        const updatedNotes = [...prevNotes, newNote];
+        localStorage.setItem('voiceNotes', JSON.stringify(updatedNotes));
+        return updatedNotes;
+      });
       setTranscript('');
     }
   }, [transcript]);
@@ -124,7 +145,16 @@ const VoiceNotesApp = () => {
         {notes.map((note) => (
           <Card key={note.id} className="mb-2">
             <CardHeader>
-              <CardTitle>Note {note.id}</CardTitle>
+              <CardTitle>{note.title}</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                {note.createdAt ? note.createdAt.toLocaleString('en-US', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                }) : 'Date not available'}
+              </p>
             </CardHeader>
             <CardContent>{note.text}</CardContent>
           </Card>
