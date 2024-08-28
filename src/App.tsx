@@ -22,8 +22,8 @@ const VoiceNotesApp = () => {
     if (error === 'not-allowed') {
       setError(`Microphone access is not allowed. ${isIOS ? 'On iOS, make sure you\'re using Safari and that you\'ve granted microphone permissions in your device settings.' : 'Please ensure you\'ve granted microphone permissions in your browser settings.'}`);
       setIsRecording(false);
-    } else if (error === 'aborted' && isIOS) {
-      console.log('Recognition aborted on iOS, attempting to restart...');
+    } else if (error === 'aborted') {
+      console.log('Recognition aborted, attempting to restart...');
       setTimeout(() => startRecognition(), 100);
     } else {
       setError(`Error: ${error}. Please ensure microphone access is allowed and try again.`);
@@ -39,7 +39,13 @@ const VoiceNotesApp = () => {
         setIsRecording(true);
       } catch (err) {
         console.error('Error starting recognition:', err);
-        handleRecognitionError('not-allowed');
+        if (err instanceof DOMException && err.name === 'InvalidStateError') {
+          // The recognition is already started, stop it and start again
+          recognitionRef.current.stop();
+          setTimeout(() => startRecognition(), 100);
+        } else {
+          handleRecognitionError('not-allowed');
+        }
       }
     } else {
       console.error('Recognition not initialized');
